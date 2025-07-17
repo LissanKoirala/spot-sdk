@@ -4,49 +4,53 @@ import os
 import shutil
 import glob
 import analog_to_digital
-
-while True:
+import time  # Optional: if you want a delay between loops
 
 ########### CREDENTIALS SECTION #####################  
-    user = "russ"
-    pswd = "12D0ct0r012rmck01"
+user = "russ"
+pswd = "12D0ct0r012rmck01"
+spot_ip = "192.168.80.3"
+spot_name = "masie"
 
-#   Autonomous mode - Spot as Access Point
-#   spot_ip = "192.168.80.3"
+# Ensure images directory exists
+os.makedirs("images", exist_ok=True)
 
-#   York Road Spot_london Access Point
-    spot_ip = "192.168.2.102"
+while True:
+    print("Starting the spot.take_photo process")
 
-    spot_name = "masie"
-
-    print ("Starting the spot.take_photo process")
-    # Create Robot Object
+    # Create Spot object and take photo
     with suppress_stdout():
-      spot = Spot(spot_name, spot_ip, user, pswd)
+        spot = Spot(spot_name, spot_ip, user, pswd)
+
     spot.take_photo_new()
-    print ("Taking Photo")
-# Rename latest jpg to gauge.jpg
-# First, clean the images directory - remove latest.jpg, but check that it exists first
+    print("Photo taken")
 
-    if os.path.exists("images/latest.jpg"):
-        os.remove("images/latest.jpg")
-    else:
-        print("The file does not exist")
+    # Remove old 'latest.jpg' if it exists
+    latest_img_path = "images/latest.jpg"
+    if os.path.exists(latest_img_path):
+        os.remove(latest_img_path)
 
-    # Next, look for a jpg image - there should be one creted using the spot.take_photo_new() function - it's a random name!        
-        images = [f for f in os.listdir() if '.jpg' in f.lower()]
+    # Move the new JPG (assumes only one new JPG created per cycle)
+    new_images = [f for f in os.listdir() if f.lower().endswith('.jpg') and not f.startswith("images/")]
 
-    # Next, move the image into the images directory
-        for image in images:
-            print (image)
-            new_path = 'images/' + image
-            shutil.move(image, new_path)
+    if not new_images:
+        print("No new image found!")
+        continue
 
-    # Now change the file name of the latest (should be the only) file to latest.jpg
-            list_of_files = glob.glob('images/*.jpg') 
-            latest_file = max(list_of_files, key=os.path.getctime)
-            print(latest_file)
-            os.rename(latest_file, 'images/latest.jpg')
+    # Move and rename the image
+    new_image = new_images[0]
+    new_path = os.path.join("images", new_image)
+    shutil.move(new_image, new_path)
 
-            value = analog_to_digital.convert("images/latest.jpg")
-            print(f"Meter reading {value}")
+    os.rename(new_path, latest_img_path)
+    print(f"Moved and renamed {new_image} to {latest_img_path}")
+
+    # Convert image to digital reading
+    try:
+        value = analog_to_digital.convert(latest_img_path)
+        print(f"Meter reading: {value}")
+    except Exception as e:
+        print(f"Error converting image to reading: {e}")
+
+    # Add a short delay between iterations
+    # time.sleep(5)
