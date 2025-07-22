@@ -82,21 +82,36 @@ def get_current_value(img, min_angle, max_angle, min_value, max_value, x, y, r, 
         return None
 
     # YOU NEED TO LIMIT THIS, IF NOT IN SOME IMAGES THERE ARE TENS OF THOUSANDS OF LINES
-    lines = lines[:100]
+    # lines = lines[:100]
 
-    final_line_list = []
+    # Only consider lines whose endpoints are both within the gauge circle radius
+    candidate_lines = []
     for line in lines:
         for x1, y1, x2, y2 in line:
             d1 = dist_2_pts(x, y, x1, y1)
             d2 = dist_2_pts(x, y, x2, y2)
-            if d1 > d2:
-                d1, d2 = d2, d1
-            if 0.15*r < d1 < 0.25*r and 0.5*r < d2 < 1.0*r:
-                final_line_list.append([x1, y1, x2, y2])
+            # Both endpoints must be within the circle (with a small margin)
+            if d1 < 0.98*r and d2 < 0.98*r:
+                candidate_lines.append([x1, y1, x2, y2, d1, d2])
 
-    if not final_line_list:
-        print("No valid needle found after filtering.")
+    if not candidate_lines:
+        print("No lines within gauge circle found.")
         return None
+
+    # Pick the longest line among candidates (conservative: must be at least 40% the radius)
+    longest_line = None
+    max_length = 0
+    for x1, y1, x2, y2, d1, d2 in candidate_lines:
+        length = dist_2_pts(x1, y1, x2, y2)
+        if length > max_length and length > 0.4*r:
+            max_length = length
+            longest_line = [x1, y1, x2, y2]
+
+    if longest_line is None:
+        print("No valid needle found after conservative filtering.")
+        return None
+
+    final_line_list = [longest_line]
 
     x1, y1, x2, y2 = final_line_list[0]
     cv2.line(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -170,4 +185,4 @@ def convert(filename):
         print(f"Error during conversion: {str(e)}")
 
 if __name__ == '__main__':
-    convert("images/latest.jpg")
+    convert("trial.jpg")
