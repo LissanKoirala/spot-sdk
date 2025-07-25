@@ -1,7 +1,53 @@
 import cv2
 import numpy as np
 import os
+import threading
+import signal
 
+def timeout_handler(signum, frame):
+    raise TimeoutError("Process timed out")
+
+def function_with_timeout(func, args=(), kwargs=None, timeout=10):
+    """
+    Run any function with a timeout
+    
+    Args:
+        func: Function to execute
+        args: Tuple of positional arguments for the function
+        kwargs: Dict of keyword arguments for the function
+        timeout: Maximum seconds to wait (default: 10)
+    
+    Returns:
+        Function result or None if timeout/error
+    """
+    if kwargs is None:
+        kwargs = {}
+        
+    result = [None]
+    exception = [None]
+    
+    def target():
+        try:
+            result[0] = func(*args, **kwargs)
+        except Exception as e:
+            exception[0] = e
+    
+    thread = threading.Thread(target=target)
+    thread.daemon = True
+    thread.start()
+    thread.join(timeout)
+    
+    if thread.is_alive():
+        print(f"Function '{func.__name__}' timed out after {timeout} seconds")
+        return None
+    
+    if exception[0]:
+        print(f"Error in function '{func.__name__}': {str(exception[0])}")
+        return None
+    
+    return result[0]
+
+# Your existing functions remain the same...
 def avg_circles(circles, b):
     avg_x = 0
     avg_y = 0
@@ -23,9 +69,17 @@ def calibrate_gauge(filename, folder_path):
     height, width = img.shape[:2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    print("finding circles") # TODO: SOME PICS SPEND TOO MUCH TIME HERE BECAUSE OF THE THRESHOLD, FIX THIS
-    circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 20, np.array([]), 100, 50,
-                                int(height * 0.35), int(height * 0.48))
+    circles = cv2.HoughCircles(
+        gray,
+        cv2.HOUGH_GRADIENT,
+        dp=1,
+        minDist=height // 2,
+        param1=100,
+        param2=60,
+        minRadius=int(height * 0.35),
+        maxRadius=int(height * 0.48)
+    )
+
     print("done finding circles")
 
     if circles is None:
@@ -81,9 +135,6 @@ def get_current_value(img, min_angle, max_angle, min_value, max_value, x, y, r, 
         cv2.imwrite(os.path.join(folder_path, filename + "-debug-threshold.jpg"), dst2)
         return None
 
-    # YOU NEED TO LIMIT THIS, IF NOT IN SOME IMAGES THERE ARE TENS OF THOUSANDS OF LINES
-    # lines = lines[:100]
-
     # Only consider lines whose endpoints are both within the gauge circle radius
     candidate_lines = []
     for line in lines:
@@ -134,8 +185,6 @@ def get_current_value(img, min_angle, max_angle, min_value, max_value, x, y, r, 
 
     return value
 
-
-
 def convert(filename):
     try:
         image = cv2.imread(filename)
@@ -179,10 +228,11 @@ def convert(filename):
         print(f"Current reading: {val:.2f} {units}")
 
         with open("./images/MyFile.txt", "w") as f:
-            f.write(str(val))
+            f.write(str(val) + "\n")
 
     except Exception as e:
         print(f"Error during conversion: {str(e)}")
 
 if __name__ == '__main__':
-    convert("trial.jpg")
+    # Use generic timeout wrapper
+    function_with_timeout(convert, args=("trial.jpg",), timeout=3)

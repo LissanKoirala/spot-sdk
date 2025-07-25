@@ -47,7 +47,8 @@ while True:
 
     # Convert image to digital reading
     try:
-        value = analog_to_digital.convert(latest_img_path)
+        # value = analog_to_digital.convert(latest_img_path)
+        value = analog_to_digital.function_with_timeout(analog_to_digital.convert, args=(latest_img_path,), timeout=3)
         print(f"Meter reading: {value}")
     except Exception as e:
         print(f"Error converting image to reading: {e}")
