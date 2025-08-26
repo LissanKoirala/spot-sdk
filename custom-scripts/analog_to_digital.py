@@ -235,4 +235,4 @@ def convert(filename):
 
 if __name__ == '__main__':
     # Use generic timeout wrapper
-    function_with_timeout(convert, args=("trial.jpg",), timeout=3)
+    function_with_timeout(convert, args=("output.jpg",), timeout=3)
