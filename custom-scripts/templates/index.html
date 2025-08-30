@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spot Meter Reader - Real-Time Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0f;
+            --text-color: #e0e0e0;
+            --glow-color: #00ffff;
+            --line-color: rgba(0, 255, 255, 0.7);
+            --overlay-bg: rgba(10, 10, 15, 0.85);
+            --alert-color: #ff4d4d;
+            --ok-color: #4dff88;
+        }
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+        body { 
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column; /* To stack info-bar and stream-container */
+        }
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: var(--overlay-bg);
+            border-bottom: 1px solid var(--line-color);
+            flex-shrink: 0;
+            font-weight: 500;
+            transition: background-color 0.5s, color 0.5s;
+        }
+        .info-bar.status-alert { background-color: var(--alert-color); color: #fff; }
+        .info-bar.status-ok { background-color: var(--ok-color); color: #000; }
+        .info-bar > div { flex: 1 1 0; text-align: center; }
+        .info-bar #value { font-size: 24px; font-weight: bold; }
+        .info-bar #timestamp { font-size: 12px; text-align: right; }
+        .info-bar #status { text-align: left; }
+
+        #stream-container {
+            position: relative;
+            width: 100%;
+            flex-grow: 1; /* Takes up remaining vertical space */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #main-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        #detection-overlays {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none; 
+        }
+        .detection-box {
+            position: absolute;
+            border: 2px solid var(--line-color);
+            box-shadow: 0 0 10px var(--glow-color);
+            /* x, y, w, h set by JS */
+        }
+        .zoom-preview {
+            position: absolute;
+            width: 300px; /* Increased by 20% */
+            height: 300px;
+            border: 2px solid var(--line-color);
+            box-shadow: 0 0 15px var(--glow-color), 0 0 25px var(--glow-color) inset;
+            background-color: var(--overlay-bg);
+            opacity: 0.9;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .zoom-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .tracer-line {
+            position: absolute;
+            background-color: var(--line-color);
+            height: 2px;
+            transform-origin: left center;
+        }
+        #log-overlay {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 350px;
+            height: calc(100% - 40px); /* Taller log */
+            background-color: var(--overlay-bg);
+            border: 1px solid var(--line-color);
+            border-radius: 8px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-y: auto;
+            box-shadow: 0 0 10px var(--glow-color);
+        }
+        /* Styled Scrollbar */
+        #log-overlay::-webkit-scrollbar {
+            width: 8px;
+        }
+        #log-overlay::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+        #log-overlay::-webkit-scrollbar-thumb {
+            background-color: var(--line-color);
+            border-radius: 4px;
+            border: 2px solid var(--bg-color);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+</head>
+<body>
+
+    <div class="info-bar" id="info-bar">
+        <div id="status">Status: Waiting for result...</div>
+        <div id="value">--</div>
+        <div id="timestamp">N/A</div>
+    </div>
+
+    <div id="stream-container">
+        <img id="main-image" src="" alt="Live feed will appear here.">
+        <div id="detection-overlays"></div>
+    </div>
+
+    <div id="log-overlay"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const socket = io();
+            const log = document.getElementById('log-overlay');
+            const mainImage = document.getElementById('main-image');
+            const overlaysContainer = document.getElementById('detection-overlays');
+            const infoBar = document.getElementById('info-bar');
+
+            function addLog(message) {
+                const now = new Date().toLocaleTimeString();
+                const newEntry = document.createElement('div');
+                newEntry.textContent = `[${now}] ${message}`;
+                log.insertBefore(newEntry, log.firstChild);
+            }
+
+            socket.on('connect', () => { addLog('Connected to server.'); });
+            socket.on('disconnect', () => { addLog('Disconnected from server.'); });
+
+            socket.on('new_result', function(data) {
+                addLog(`Status: ${data.status} | Value: ${data.value}`);
+                mainImage.src = `/assets/${data.base_image_url}?t=${new Date().getTime()}`;
+            
+                // Update Info Bar
+                document.getElementById('status').textContent = `Status: ${data.status}`;
+                document.getElementById('value').textContent = data.value;
+                document.getElementById('timestamp').textContent = `Updated: ${new Date(data.timestamp).toLocaleString()}`;
+                infoBar.className = 'info-bar'; // Reset classes
+                if (data.status.startsWith('ALERT')) {
+                    infoBar.classList.add('status-alert');
+                } else if (data.status === 'OK') {
+                    infoBar.classList.add('status-ok');
+                }
+
+                mainImage.onload = () => {
+                    overlaysContainer.innerHTML = ''; // Clear previous overlays
+
+                    if (!data.detection_box || !data.crop_image_url) return;
+
+                    const rect = mainImage.getBoundingClientRect();
+                    const scaleX = rect.width / mainImage.naturalWidth;
+                    const scaleY = rect.height / mainImage.naturalHeight;
+                    const [dx, dy, dw, dh] = data.detection_box;
+                    const box = {
+                        x: dx * scaleX + rect.left,
+                        y: dy * scaleY + rect.top,
+                        w: dw * scaleX,
+                        h: dh * scaleY
+                    };
+
+                    // --- Create Bounding Box on Main Image ---
+                    const detectionBox = document.createElement('div');
+                    detectionBox.className = 'detection-box';
+                    detectionBox.style.left = `${box.x}px`;
+                    detectionBox.style.top = `${box.y}px`;
+                    detectionBox.style.width = `${box.w}px`;
+                    detectionBox.style.height = `${box.h}px`;
+                    overlaysContainer.appendChild(detectionBox);
+
+                    // --- Create Zoomed Preview ---
+                    const zoomPreviewSize = 300; // New, larger size
+                    const zoomPreview = document.createElement('div');
+                    zoomPreview.className = 'zoom-preview';
+                    zoomPreview.style.width = `${zoomPreviewSize}px`;
+                    zoomPreview.style.height = `${zoomPreviewSize}px`;
+                    const zoomImg = document.createElement('img');
+                    zoomImg.src = `/assets/${data.crop_image_url}?t=${new Date().getTime()}`;
+                    zoomPreview.appendChild(zoomImg);
+                    
+                    const zoomX = box.x + box.w + 50;
+                    const zoomY = box.y;
+                    zoomPreview.style.left = `${zoomX}px`;
+                    zoomPreview.style.top = `${zoomY}px`;
+                    overlaysContainer.appendChild(zoomPreview);
+
+                    // --- Draw Tracer Lines ---
+                    const boxCorners = [
+                        {x: box.x, y: box.y},
+                        {x: box.x + box.w, y: box.y + box.h}
+                    ];
+                    const zoomCorners = [
+                        {x: zoomX, y: zoomY},
+                        {x: zoomX + zoomPreviewSize, y: zoomY + zoomPreviewSize}
+                    ];
+
+                    createTracerLine(boxCorners[0], zoomCorners[0]);
+                    createTracerLine(boxCorners[1], zoomCorners[1]);
+                };
+            });
+
+            function createTracerLine(p1, p2) {
+                const length = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+                const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x) * (180 / Math.PI);
+                const line = document.createElement('div');
+                line.className = 'tracer-line';
+                line.style.width = `${length}px`;
+                line.style.left = `${p1.x}px`;
+                line.style.top = `${p1.y}px`;
+                line.style.transform = `rotate(${angle}deg)`;
+                overlaysContainer.appendChild(line);
+            }
+        });
+    </script>
+
+</body>
+</html>
