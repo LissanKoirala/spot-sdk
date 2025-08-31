@@ -81,8 +81,8 @@ def process_image(image_path, yolo_model, mqtt_client):
     else:
         # --- Step 2: Process Gauge Image (Analog-to-Digital method) ---
         try:
-            # value, processed_img = analog_to_digital.convert(cropped_img)
-            value, processed_img = russ_mqtt_one.process_image(cropped_img)
+            value, processed_img = analog_to_digital.convert(cropped_img)
+            # value, processed_img = russ_mqtt_one.process_image(cropped_img)
 
         except Exception as e:
             print(f"[Thread for {os.path.basename(image_path)}] - Error during value conversion: {e}")

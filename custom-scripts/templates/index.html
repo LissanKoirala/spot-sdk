@@ -3,181 +3,420 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spot Meter Reader - Real-Time Dashboard</title>
+    <title>Spot + IBM Maximo — Real‑Time Dashboard</title>
+    <!-- Carbon-inspired theme tokens -->
     <style>
         :root {
-            --bg-color: #0a0a0f;
-            --text-color: #e0e0e0;
-            --glow-color: #00ffff;
-            --line-color: rgba(0, 255, 255, 0.7);
-            --overlay-bg: rgba(10, 10, 15, 0.85);
-            --alert-color: #ff4d4d;
-            --ok-color: #4dff88;
+            /* IBM Carbon core palette */
+            --ibm-blue-60: #0f62fe;  /* Blue 60 */
+            --ibm-gray-100: #161616; /* Gray 100 */
+            --ibm-gray-90: #262626;  /* Gray 90 */
+            --ibm-gray-80: #393939;  /* Gray 80 */
+            --ibm-white: #ffffff;    /* White */
+            --ibm-text-01: #f4f4f4;  /* text on g100 */
+            --ibm-text-02: #c6c6c6;  /* subdued text */
+            --ibm-border-subtle: #525252; /* subtle borders on dark */
+            --support-success: #24a148;
+            --support-error: #da1e28;
+            --support-info: #4589ff;
+            --header-h: 64px;
+            --time-col: 10ch;
         }
-        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
-        body { 
-            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            display: flex;
-            flex-direction: column; /* To stack info-bar and stream-container */
-        }
-        .info-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 20px;
-            background-color: var(--overlay-bg);
-            border-bottom: 1px solid var(--line-color);
-            flex-shrink: 0;
-            font-weight: 500;
-            transition: background-color 0.5s, color 0.5s;
-        }
-        .info-bar.status-alert { background-color: var(--alert-color); color: #fff; }
-        .info-bar.status-ok { background-color: var(--ok-color); color: #000; }
-        .info-bar > div { flex: 1 1 0; text-align: center; }
-        .info-bar #value { font-size: 24px; font-weight: bold; }
-        .info-bar #timestamp { font-size: 12px; text-align: right; }
-        .info-bar #status { text-align: left; }
 
-        #stream-container {
+        html, body { height: 100%; margin: 0; padding: 0; }
+
+        body {
+            font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--ibm-gray-100);
+            color: var(--ibm-text-01);
+            display: grid;
+            grid-template-rows: var(--header-h) 1fr;
+            overflow: hidden; /* full-viewport app */
+        }
+
+        /* UI Shell header */
+        .app-header {
             position: relative;
-            width: 100%;
-            flex-grow: 1; /* Takes up remaining vertical space */
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 0 20px;
+            background: var(--ibm-gray-100);
+            border-bottom: 1px solid var(--ibm-border-subtle);
+        }
+        .app-brand {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 10px;
+            font-size: 18px;
+            letter-spacing: .16px;
+            color: var(--ibm-text-02);
+        }
+        .app-brand strong { color: var(--ibm-white); font-weight: 700; font-size: 20px; letter-spacing: .3px; }
+        .app-title { font-size: 16px; color: var(--ibm-text-02); }
+        .app-title .pill { color: var(--ibm-blue-60); font-weight: 600; }
+
+        /* Main layout */
+        .app-main {
+            display: grid;
+            grid-template-columns: 1fr 396px; /* content + right rail (10% wider) */
+            grid-template-rows: auto 1fr;
+            gap: 16px;
+            padding: 16px;
+            background: var(--ibm-gray-100);
+            height: calc(100vh - var(--header-h));
+            box-sizing: border-box;
+        }
+
+        /* Top status bar as a Carbon-style card */
+        .status-card {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            align-items: center;
+            gap: 12px;
+            background: var(--ibm-gray-90);
+            border: 1px solid var(--ibm-border-subtle);
+            border-radius: 6px;
+            padding: 12px 16px;
+        }
+        .status-pulse {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--support-info);
+            box-shadow: 0 0 0 3px rgba(15,98,254,0.15);
+        }
+        .status-dot.ok { background: var(--support-success); box-shadow: 0 0 0 3px rgba(36,161,72,0.15); }
+        .status-dot.alert { background: var(--support-error); box-shadow: 0 0 0 3px rgba(218,30,40,0.15); }
+        .status-text { font-weight: 600; }
+        .status-meta { font-size: 12px; color: var(--ibm-text-02); }
+        .status-value {
+            font-size: 24px; font-weight: 700; letter-spacing: .16px;
+            color: var(--ibm-white);
+        }
+
+        /* Stream area */
+        .surface {
+            position: relative;
+            background: var(--ibm-gray-90);
+            border: 1px solid var(--ibm-border-subtle);
+            border-radius: 6px;
+            overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
         }
+        #stream-container.surface { min-height: 0; }
         #main-image {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
+            display: block;
         }
         #detection-overlays {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            pointer-events: none; 
+            position: absolute; inset: 0;
+            pointer-events: none;
         }
         .detection-box {
             position: absolute;
-            border: 2px solid var(--line-color);
-            box-shadow: 0 0 10px var(--glow-color);
-            /* x, y, w, h set by JS */
+            border: 2px solid var(--ibm-blue-60);
+            box-shadow: 0 0 0 1px rgba(15,98,254,.25), 0 0 18px rgba(15,98,254,.35), 0 0 36px rgba(15,98,254,.2);
+            border-radius: 6px;
+            z-index: 2;
+        }
+        .detection-box::after {
+            content: "";
+            position: absolute; inset: -6px; border-radius: 10px; pointer-events: none;
+            background: radial-gradient(70% 70% at 50% 50%, rgba(15,98,254,.22) 0%, rgba(15,98,254,0) 70%);
+            filter: blur(2px); opacity: .7;
         }
         .zoom-preview {
             position: absolute;
-            width: 300px; /* Increased by 20% */
-            height: 300px;
-            border: 2px solid var(--line-color);
-            box-shadow: 0 0 15px var(--glow-color), 0 0 25px var(--glow-color) inset;
-            background-color: var(--overlay-bg);
-            opacity: 0.9;
+            width: 300px; height: 300px;
+            border: 2px dotted rgba(15,98,254,.55);
+            background: radial-gradient(120% 120% at 15% 10%, rgba(69,137,255,.08) 0%, rgba(15,98,254,.04) 40%, rgba(0,0,0,.0) 70%),
+                        var(--ibm-gray-100);
             border-radius: 8px;
             overflow: hidden;
+            box-shadow:
+                0 8px 28px rgba(15,98,254,.28),
+                0 0 36px rgba(15,98,254,.35),
+                0 0 0 1px rgba(15,98,254,.28) inset;
+            backdrop-filter: blur(2px) saturate(120%);
+            -webkit-backdrop-filter: blur(2px) saturate(120%);
+            transform: translateZ(0);
+            animation: zoomIn 220ms cubic-bezier(.16,1,.3,1);
+            z-index: 3;
         }
-        .zoom-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .zoom-preview::after {
+            content: "";
+            position: absolute; inset: 0;
+            border-radius: 8px;
+            pointer-events: none;
+            box-shadow: inset 0 0 24px rgba(15,98,254,.12), 0 0 16px rgba(15,98,254,.2);
+        }
+        .zoom-preview img {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; display: block;
+            image-rendering: -webkit-optimize-contrast;
+            filter: contrast(105%) saturate(110%);
+            transform: scale(1.02);
+        }
+        .zoom-preview .hud { position: absolute; inset: 0; pointer-events: none; }
+        .zoom-preview .hud-grid { display: none; }
+        .zoom-preview .hud-crosshair { display: none; }
+        .zoom-preview .hud-glow {
+            position: absolute; inset: 0; pointer-events: none;
+            background:
+                radial-gradient(60% 60% at 50% 50%, rgba(15,98,254,.18) 0%, rgba(15,98,254,.08) 40%, rgba(15,98,254,0) 70%),
+                radial-gradient(100% 100% at 50% 50%, rgba(69,137,255,.25) 10%, rgba(69,137,255,0) 60%);
+            mix-blend-mode: screen;
+            filter: blur(0.2px);
+        }
+        .zoom-preview .hud-lines {
+            position: absolute; inset: 0; pointer-events: none;
+            background-image:
+                repeating-linear-gradient(0deg, rgba(69,137,255,.16), rgba(69,137,255,.16) 1px, rgba(69,137,255,0) 12px),
+                repeating-linear-gradient(90deg, rgba(15,98,254,.10), rgba(15,98,254,.10) 1px, rgba(15,98,254,0) 12px);
+            opacity: .22;
+            filter: blur(.35px);
+        }
+        /* Main image scanline */
+        .scan-wrapper { position: absolute; pointer-events: none; z-index: 2; }
+        .scanline {
+            position: absolute; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, rgba(15,98,254,0) 0%, rgba(15,98,254,.9) 40%, rgba(15,98,254,0) 100%);
+            filter: drop-shadow(0 0 6px rgba(15,98,254,.65));
+            animation: scanY 2.4s linear infinite;
+        }
+        .zoom-preview .hud-caption {
+            position: absolute; bottom: 8px; right: 8px;
+            background: rgba(22,22,22,.65);
+            border: 1px solid var(--ibm-border-subtle);
+            color: var(--ibm-text-02);
+            border-radius: 4px; padding: 2px 6px; font-size: 11px; letter-spacing: .2px;
+        }
+
+        @keyframes zoomIn { from { opacity: 0; transform: translateZ(0) scale(.97); } to { opacity: 1; transform: translateZ(0) scale(1); } }
+        @keyframes scanY { 0% { top: 8%; } 100% { top: 92%; } }
+
+        /* connector lines between box and zoom are drawn via JS */
         .tracer-line {
             position: absolute;
-            background-color: var(--line-color);
-            height: 2px;
+            height: 4px;
+            background: linear-gradient(90deg, rgba(15,98,254,0), rgba(15,98,254,0.6), rgba(15,98,254,0));
+            opacity: .65;
             transform-origin: left center;
+            border-radius: 2px;
+            filter: blur(0.2px);
+            z-index: 1; /* under popup/box so it doesn't sit on top */
         }
+
+        /* Right rail log */
         #log-overlay {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 350px;
-            height: calc(100% - 40px); /* Taller log */
-            background-color: var(--overlay-bg);
-            border: 1px solid var(--line-color);
-            border-radius: 8px;
-            padding: 15px;
-            font-family: monospace;
+            background: var(--ibm-gray-90);
+            border: 1px solid var(--ibm-border-subtle);
+            border-radius: 6px;
+            padding: 12px 12px 8px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
             font-size: 12px;
             overflow-y: auto;
-            box-shadow: 0 0 10px var(--glow-color);
         }
-        /* Styled Scrollbar */
-        #log-overlay::-webkit-scrollbar {
-            width: 8px;
+        #log-overlay .log-title {
+            font-weight: 600; margin-bottom: 8px; color: var(--ibm-white);
         }
-        #log-overlay::-webkit-scrollbar-track {
-            background: var(--bg-color);
-        }
-        #log-overlay::-webkit-scrollbar-thumb {
-            background-color: var(--line-color);
-            border-radius: 4px;
-            border: 2px solid var(--bg-color);
-        }
+        #log-overlay .log-entry { color: var(--ibm-text-02); margin-bottom: 10px; white-space: normal; }
+        #log-overlay .log-entry .row { display: flex; align-items: baseline; gap: 6px; }
+        #log-overlay .log-entry .time { display:inline-block; width: var(--time-col); color: var(--ibm-text-02); font-variant-numeric: tabular-nums; }
+        #log-overlay .log-entry .title { color: var(--ibm-white); font-weight: 500; }
+        #log-overlay .log-entry .time-spacer { display:inline-block; width: var(--time-col); }
+        #log-overlay .log-entry .subline { color: var(--ibm-text-02); }
+        #log-overlay .log-entry.ok .subline { color: var(--support-success); }
+        #log-overlay .log-entry.alert .subline { color: var(--support-error); }
+        #log-overlay .log-entry.info .subline { color: var(--support-info); }
+        #log-overlay .status { font-weight: 600; }
+        #log-overlay .status.ok { color: var(--support-success); }
+        #log-overlay .status.alert { color: var(--support-error); }
+        #log-overlay .status.info { color: var(--support-info); }
+        #log-overlay .value { font-weight: 700; }
+        #log-overlay .value.ok { color: var(--support-success); }
+        #log-overlay .value.alert { color: var(--support-error); }
+        #log-overlay .value.info { color: var(--support-info); }
+        #log-overlay::-webkit-scrollbar { width: 8px; }
+        #log-overlay::-webkit-scrollbar-thumb { background: var(--ibm-gray-80); border-radius: 4px; }
+        #log-overlay::-webkit-scrollbar-track { background: transparent; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
 </head>
 <body>
+    <!-- Header -->
+    <header class="app-header" role="banner">
+        <div class="app-brand">
+            <strong>IBM</strong>
+            <span class="app-title">Maximo Integration</span>
+        </div>
+        <div class="app-title">Spot Meter Reader <span class="pill">• Live</span></div>
+    </header>
 
-    <div class="info-bar" id="info-bar">
-        <div id="status">Status: Waiting for result...</div>
-        <div id="value">--</div>
-        <div id="timestamp">N/A</div>
-    </div>
+    <!-- Main content area -->
+    <main class="app-main" role="main">
+        <!-- Status card -->
+        <section class="status-card" id="status-card">
+            <div class="status-pulse">
+                <span class="status-dot" id="status-dot" aria-hidden="true"></span>
+                <span class="status-text" id="status">Status: Waiting for result...</span>
+            </div>
+            <div class="status-value" id="value">--</div>
+            <div class="status-meta" id="timestamp">N/A</div>
+        </section>
 
-    <div id="stream-container">
-        <img id="main-image" src="" alt="Live feed will appear here.">
-        <div id="detection-overlays"></div>
-    </div>
+        <!-- Stream surface -->
+        <section id="stream-container" class="surface" aria-label="Live feed">
+            <img id="main-image" src="" alt="Live feed will appear here.">
+            <div id="detection-overlays"></div>
+        </section>
 
-    <div id="log-overlay"></div>
+        <!-- Right rail: Log -->
+        <aside id="log-overlay" aria-live="polite" aria-label="Event log">
+            <div class="log-title">Activity</div>
+        </aside>
+    </main>
 
     <script>
-        document.addEventListener('DOMContentLoaded', (event) => {
+        document.addEventListener('DOMContentLoaded', () => {
             const socket = io();
             const log = document.getElementById('log-overlay');
             const mainImage = document.getElementById('main-image');
             const overlaysContainer = document.getElementById('detection-overlays');
-            const infoBar = document.getElementById('info-bar');
+            const statusEl = document.getElementById('status');
+            const valueEl = document.getElementById('value');
+            const tsEl = document.getElementById('timestamp');
+            const dotEl = document.getElementById('status-dot');
 
-            function addLog(message) {
-                const now = new Date().toLocaleTimeString();
-                const newEntry = document.createElement('div');
-                newEntry.textContent = `[${now}] ${message}`;
-                log.insertBefore(newEntry, log.firstChild);
+            function addLogMessage(title, subValue = null, level = 'info') {
+                const timeStr = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${level}`;
+
+                // Row 1: [time] Title
+                const row1 = document.createElement('div');
+                row1.className = 'row';
+                const time = document.createElement('span');
+                time.className = 'time';
+                time.textContent = `[${timeStr}]`;
+                const t = document.createElement('span');
+                t.className = 'title';
+                t.textContent = ` ${title}`;
+                row1.appendChild(time);
+                row1.appendChild(t);
+                entry.appendChild(row1);
+
+                // Row 2: indented value only
+                if (subValue !== null && subValue !== undefined && subValue !== '') {
+                    const row2 = document.createElement('div');
+                    row2.className = 'row row-sub';
+                    const spacer = document.createElement('span');
+                    spacer.className = 'time-spacer';
+                    const sub = document.createElement('span');
+                    sub.className = 'subline';
+                    sub.textContent = String(subValue);
+                    row2.appendChild(spacer);
+                    row2.appendChild(sub);
+                    entry.appendChild(row2);
+                }
+
+                log.appendChild(entry);
+                log.scrollTop = log.scrollHeight;
             }
 
-            socket.on('connect', () => { addLog('Connected to server.'); });
-            socket.on('disconnect', () => { addLog('Disconnected from server.'); });
+            function addResultLog(value, level, status) {
+                const timeStr = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${level}`;
 
-            socket.on('new_result', function(data) {
-                addLog(`Status: ${data.status} | Value: ${data.value}`);
-                mainImage.src = `/assets/${data.base_image_url}?t=${new Date().getTime()}`;
-            
-                // Update Info Bar
-                document.getElementById('status').textContent = `Status: ${data.status}`;
-                document.getElementById('value').textContent = data.value;
-                document.getElementById('timestamp').textContent = `Updated: ${new Date(data.timestamp).toLocaleString()}`;
-                infoBar.className = 'info-bar'; // Reset classes
-                if (data.status.startsWith('ALERT')) {
-                    infoBar.classList.add('status-alert');
+                // Row 1: [time] Result — <value>
+                const row1 = document.createElement('div');
+                row1.className = 'row';
+                const time = document.createElement('span');
+                time.className = 'time';
+                time.textContent = `[${timeStr}]`;
+                const title = document.createElement('span');
+                title.className = 'title';
+                title.textContent = ' Result — ';
+                const val = document.createElement('span');
+                val.className = `value ${level}`;
+                val.textContent = String(value);
+                row1.appendChild(time);
+                row1.appendChild(title);
+                row1.appendChild(val);
+                entry.appendChild(row1);
+
+                // Row 2: Status only (no server time)
+                const row2 = document.createElement('div');
+                row2.className = 'row row-sub';
+                const spacer = document.createElement('span');
+                spacer.className = 'time-spacer';
+                const meta = document.createElement('span');
+                meta.className = 'subline';
+                const statusSpan = document.createElement('span');
+                statusSpan.className = `status ${level}`;
+                statusSpan.textContent = status;
+                meta.appendChild(document.createTextNode('Status: '));
+                meta.appendChild(statusSpan);
+                row2.appendChild(spacer);
+                row2.appendChild(meta);
+                entry.appendChild(row2);
+
+                log.appendChild(entry);
+                log.scrollTop = log.scrollHeight;
+            }
+
+            socket.on('connect', () => addLogMessage('Connection', 'Connected to server.', 'info'));
+            socket.on('disconnect', () => addLogMessage('Connection', 'Disconnected from server.', 'alert'));
+
+            socket.on('new_result', (data) => {
+                const level = (typeof data.status === 'string' && data.status.startsWith('ALERT')) ? 'alert' : (data.status === 'OK' ? 'ok' : 'info');
+                addResultLog(data.value, level, data.status);
+                // update image with cache-busting
+                mainImage.src = `/assets/${data.base_image_url}?t=${Date.now()}`;
+
+                // Update status UI
+                statusEl.textContent = `Status: ${data.status}`;
+                valueEl.textContent = data.value;
+                tsEl.textContent = `Updated: ${new Date(data.timestamp).toLocaleString()}`;
+
+                dotEl.className = 'status-dot';
+                if (typeof data.status === 'string' && data.status.startsWith('ALERT')) {
+                    dotEl.classList.add('alert');
                 } else if (data.status === 'OK') {
-                    infoBar.classList.add('status-ok');
+                    dotEl.classList.add('ok');
                 }
 
                 mainImage.onload = () => {
-                    overlaysContainer.innerHTML = ''; // Clear previous overlays
-
+                    overlaysContainer.innerHTML = '';
                     if (!data.detection_box || !data.crop_image_url) return;
 
-                    const rect = mainImage.getBoundingClientRect();
-                    const scaleX = rect.width / mainImage.naturalWidth;
-                    const scaleY = rect.height / mainImage.naturalHeight;
+                    // Compute overlay geometry relative to the overlay container
+                    const containerRect = overlaysContainer.getBoundingClientRect();
+                    const imgRect = mainImage.getBoundingClientRect();
+                    const scaleX = imgRect.width / mainImage.naturalWidth;
+                    const scaleY = imgRect.height / mainImage.naturalHeight;
+                    const offsetX = imgRect.left - containerRect.left;
+                    const offsetY = imgRect.top - containerRect.top;
                     const [dx, dy, dw, dh] = data.detection_box;
+
                     const box = {
-                        x: dx * scaleX + rect.left,
-                        y: dy * scaleY + rect.top,
+                        x: offsetX + dx * scaleX,
+                        y: offsetY + dy * scaleY,
                         w: dw * scaleX,
                         h: dh * scaleY
                     };
 
-                    // --- Create Bounding Box on Main Image ---
+                    // Bounding box
                     const detectionBox = document.createElement('div');
                     detectionBox.className = 'detection-box';
                     detectionBox.style.left = `${box.x}px`;
@@ -186,40 +425,70 @@
                     detectionBox.style.height = `${box.h}px`;
                     overlaysContainer.appendChild(detectionBox);
 
-                    // --- Create Zoomed Preview ---
-                    const zoomPreviewSize = 300; // New, larger size
+                    // Zoom preview (keep in-bounds when possible)
+                    const zoomPreviewSize = 300;
                     const zoomPreview = document.createElement('div');
                     zoomPreview.className = 'zoom-preview';
                     zoomPreview.style.width = `${zoomPreviewSize}px`;
                     zoomPreview.style.height = `${zoomPreviewSize}px`;
                     const zoomImg = document.createElement('img');
-                    zoomImg.src = `/assets/${data.crop_image_url}?t=${new Date().getTime()}`;
+                    zoomImg.src = `/assets/${data.crop_image_url}?t=${Date.now()}`;
                     zoomPreview.appendChild(zoomImg);
-                    
-                    const zoomX = box.x + box.w + 50;
-                    const zoomY = box.y;
+                    // HUD overlay
+                    const hud = document.createElement('div');
+                    hud.className = 'hud';
+                    const glow = document.createElement('div'); glow.className = 'hud-glow';
+                    const lines = document.createElement('div'); lines.className = 'hud-lines';
+                    const caption = document.createElement('div'); caption.className = 'hud-caption';
+                    caption.textContent = (data && data.value) ? `Value ${data.value}` : 'Magnify';
+                    hud.appendChild(glow); hud.appendChild(lines); hud.appendChild(caption);
+                    zoomPreview.appendChild(hud);
+
+                    let zoomX = box.x + box.w + 24;
+                    let zoomY = box.y;
+                    const maxX = overlaysContainer.clientWidth - zoomPreviewSize - 12;
+                    const maxY = overlaysContainer.clientHeight - zoomPreviewSize - 12;
+                    if (zoomX > maxX) zoomX = Math.max(12, box.x - 24 - zoomPreviewSize);
+                    if (zoomY > maxY) zoomY = Math.max(12, maxY);
+
                     zoomPreview.style.left = `${zoomX}px`;
                     zoomPreview.style.top = `${zoomY}px`;
                     overlaysContainer.appendChild(zoomPreview);
 
-                    // --- Draw Tracer Lines ---
+                    // Add scanline inside the detected gauge box
+                    const scanWrap = document.createElement('div');
+                    scanWrap.className = 'scan-wrapper';
+                    scanWrap.style.left = `${box.x}px`;
+                    scanWrap.style.top = `${box.y}px`;
+                    scanWrap.style.width = `${box.w}px`;
+                    scanWrap.style.height = `${box.h}px`;
+                    const scanLine = document.createElement('div');
+                    scanLine.className = 'scanline';
+                    scanWrap.appendChild(scanLine);
+                    overlaysContainer.appendChild(scanWrap);
+
+                    // Connector lines between detection box and zoom preview (all four corners)
                     const boxCorners = [
-                        {x: box.x, y: box.y},
-                        {x: box.x + box.w, y: box.y + box.h}
+                        { x: box.x, y: box.y },
+                        { x: box.x + box.w, y: box.y },
+                        { x: box.x, y: box.y + box.h },
+                        { x: box.x + box.w, y: box.y + box.h }
                     ];
                     const zoomCorners = [
-                        {x: zoomX, y: zoomY},
-                        {x: zoomX + zoomPreviewSize, y: zoomY + zoomPreviewSize}
+                        { x: zoomX, y: zoomY },
+                        { x: zoomX + zoomPreviewSize, y: zoomY },
+                        { x: zoomX, y: zoomY + zoomPreviewSize },
+                        { x: zoomX + zoomPreviewSize, y: zoomY + zoomPreviewSize }
                     ];
-
-                    createTracerLine(boxCorners[0], zoomCorners[0]);
-                    createTracerLine(boxCorners[1], zoomCorners[1]);
+                    for (let i = 0; i < 4; i++) createTracerLine(boxCorners[i], zoomCorners[i]);
                 };
             });
 
             function createTracerLine(p1, p2) {
-                const length = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
-                const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x) * (180 / Math.PI);
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const length = Math.hypot(dx, dy);
+                const angle = Math.atan2(dy, dx) * (180 / Math.PI);
                 const line = document.createElement('div');
                 line.className = 'tracer-line';
                 line.style.width = `${length}px`;
