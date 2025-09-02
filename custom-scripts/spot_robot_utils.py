@@ -1334,8 +1334,11 @@ class Spot:
         logpoint = self.media_log_client.store(*args)
         image_raw_data = MediaLogClient.retrieve_raw_data(self.media_log_client, logpoint)
         image = Image.frombytes("RGB", (1920, 1080), image_raw_data[1], "raw")
-        image.save(str(uuid.uuid4()) + ".jpg")
+        # Save to a unique filename and return its path so callers can manage it
+        filename = str(uuid.uuid4()) + ".jpg"
+        image.save(filename)
         print("SAVED.")
+        return filename
         
 
 # async def main_async(): 

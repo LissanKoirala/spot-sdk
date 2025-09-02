@@ -25,11 +25,11 @@ RESULTS_TOPIC = "spot/results"
 SPOT_CREDS = {
     "user": "russ",
     "pswd": "12D0ct0r012rmck01",
-    "ip": "192.168.80.3",
+    "ip": "192.168.2.102",
     "name": "masie"
 }
-IMAGE_DIR = "images"  # Directory to save captured photos
-CAPTURE_INTERVAL_SECONDS = 10  # Time between captures
+IMAGE_DIR = "new-images"  # Directory to save captured photos
+CAPTURE_INTERVAL_SECONDS = 0  # Time between captures
 
 # Processing
 YOLO_MODEL_PATH = "yoloe-11l-seg.pt"
@@ -81,8 +81,8 @@ def process_image(image_path, yolo_model, mqtt_client):
     else:
         # --- Step 2: Process Gauge Image (Analog-to-Digital method) ---
         try:
-            value, processed_img = analog_to_digital.convert(cropped_img)
-            # value, processed_img = russ_mqtt_one.process_image(cropped_img)
+            # value, processed_img = analog_to_digital.convert(cropped_img)
+            value, processed_img = russ_mqtt_one.process_image(cropped_img)
 
         except Exception as e:
             print(f"[Thread for {os.path.basename(image_path)}] - Error during value conversion: {e}")
@@ -195,6 +195,7 @@ def main(test_mode=False):
                 # --- Step 1: Capture Image ---
                 try:
                     original_path = spot_capture.take_photo(SPOT_CREDS, IMAGE_DIR)
+                    print(original_path)
                 except Exception as e:
                     print(f"Error during spot_capture.take_photo: {e}")
                     original_path = None
